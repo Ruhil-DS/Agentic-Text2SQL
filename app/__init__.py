@@ -1,0 +1,1 @@
+# Agentic Text2SQL application 
