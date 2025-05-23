@@ -15,7 +15,7 @@ class MongoDBClient:
     def _init_connection(self):
         try:
             # Log connection details for debugging
-            app_logger.info(f"Connecting to MongoDB: URI={settings.MONGODB_URI}, DB={settings.MONGODB_DB}, Collection={settings.CREDENTIALS_COLLECTION}")
+            app_logger.info(f"Connecting to MongoDB: URI={settings.MONGODB_URI[:10]}...{settings.MONGODB_URI[-10:]}, DB={settings.MONGODB_DB}, Collection={settings.CREDENTIALS_COLLECTION}")
             
             self.client = MongoClient(settings.MONGODB_URI)
             self.db = self.client[settings.MONGODB_DB]
@@ -38,26 +38,16 @@ class MongoDBClient:
         try:
             app_logger.info(f"----------------")
             app_logger.info(f"Looking for customer ID: {customer_id}")
-            app_logger.info(f"Using MongoDB: URI={settings.MONGODB_URI}, DB={settings.MONGODB_DB}, Collection={settings.CREDENTIALS_COLLECTION}")
-            
-            # List all customers in the collection for debugging
-            all_customers = list(self.credentials_collection.find({}, {"customer_id": 1, "_id": 0}))
-            app_logger.info(f"All customers in DB: {all_customers}")
             
             credentials = self.credentials_collection.find_one({"customer_id": customer_id})
             
             # If credentials exist, verify OpenAI API key
             if credentials and "openai_api_key" in credentials:
                 api_key = credentials["openai_api_key"]
-                # Mask API key in logs
-                masked_key = f"{api_key[:4]}...{api_key[-4:]}" if len(api_key) > 8 else "***"
-                app_logger.info(f"Found API key for {customer_id}: {masked_key}")
                 
                 # Validate API key format
                 if not api_key or not api_key.strip():
                     app_logger.warning(f"Empty API key found for {customer_id}")
-                elif not api_key.startswith("sk-"):
-                    app_logger.warning(f"API key for {customer_id} has invalid format (doesn't start with sk-)")
             
             app_logger.info(f"cred found: {credentials is not None}")
             app_logger.info(f"--------------------")

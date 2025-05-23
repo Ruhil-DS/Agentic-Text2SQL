@@ -38,14 +38,13 @@ async def startup_event():
     except Exception as e:
         app_logger.error(f"Error initializing prompts: {str(e)}")
 
-# Root endpoint
-@app.get("/")
+from fastapi.responses import FileResponse
+
+# Root endpoint: serve the frontend index.html
+@app.get("/", response_class=FileResponse)
 async def root():
-    return {
-        "message": "Welcome to Agentic Text2SQL API",
-        "version": "1.0.0",
-        "docs_url": "/docs"
-    }
+    frontend_file = os.path.join(os.getcwd(), "index.html")
+    return FileResponse(frontend_file, media_type="text/html")
 
 if __name__ == "__main__":
     # Get the port from environment variable or default to 8000

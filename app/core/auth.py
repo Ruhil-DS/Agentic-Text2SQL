@@ -46,7 +46,6 @@ def authenticate_customer(customer_id: str, password: str):
         
         # Get customer credentials from MongoDB
         customer = mongo_client.get_credentials(customer_id)
-        app_logger.info(f"Customer data: {customer}")
         
         if not customer:
             app_logger.warning(f"Authentication failed - unknown customer: {customer_id}")

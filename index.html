@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agentic Text2SQL Chat</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Marked.js for Markdown rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    /* Full viewport layout */
+    html, body { margin: 0; padding: 0; height: 100vh; }
+    body { background-color: #121212; color: #e0e0e0; display: flex; flex-direction: column; }
+
+    /* Login and chat containers fill screen */
+    #login-container, #chat-container { flex: 1; display: flex; flex-direction: column; }
+
+    /* Chat inner container layout */
+    #chat-container .chat-container { flex: 1; display: flex; flex-direction: column; }
+    #chat-container .chat-box { flex: 1; overflow-y: auto; }
+    .message { margin-bottom: 1rem; }
+    .message.user { text-align: right; }
+    .message.bot { text-align: left; }
+    .bubble { display: inline-block; padding: 0.5rem 1rem; border-radius: 15px; }
+    .message.user .bubble { background-color: #1e88e5; color: #fff; }
+    .message.bot .bubble { background-color: #424242; color: #fff; }
+  </style>
+</head>
+<body>
+  <!-- Login Container -->
+  <div class="container py-4" id="login-container">
+    <h2 class="text-center mb-4">Login</h2>
+    <form id="login-form" class="mx-auto" style="max-width: 400px;">
+      <div class="mb-3">
+        <label for="username" class="form-label">Customer ID</label>
+        <input type="text" class="form-control" id="username" required>
+      </div>
+      <div class="mb-3">
+        <label for="password" class="form-label">Password</label>
+        <input type="password" class="form-control" id="password" required>
+      </div>
+      <button type="submit" class="btn btn-primary w-100">Login</button>
+    </form>
+  </div>
+
+  <!-- Chat Container -->
+  <div class="d-none d-flex flex-column" id="chat-container">
+    <nav class="navbar navbar-dark bg-dark">
+      <div class="container-fluid">
+        <span class="navbar-brand">Agentic Text2SQL Chat</span>
+        <button class="btn btn-outline-light" id="logout-btn">Logout</button>
+      </div>
+    </nav>
+    <div class="container chat-container py-3">
+      <div id="chat-box" class="chat-box"></div>
+    </div>
+    <div class="container pb-3">
+      <div class="input-group">
+        <textarea id="user-input" class="form-control" placeholder="Type your question..." rows="1"></textarea>
+        <button class="btn btn-primary" id="send-btn">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Application Script -->
+  <script>
+    (function() {
+      const loginContainer = document.getElementById('login-container');
+      const chatContainer = document.getElementById('chat-container');
+
+      // If token exists, skip login
+      if (localStorage.getItem('token')) {
+        loginContainer.classList.add('d-none');
+        chatContainer.classList.remove('d-none');
+      }
+
+      // Login form handler
+      document.getElementById('login-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        try {
+          const resp = await fetch('/api/v1/auth/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `username=${username}&password=${password}`
+          });
+          if (!resp.ok) throw new Error('Login failed');
+          const data = await resp.json();
+          localStorage.setItem('token', data.access_token);
+          localStorage.setItem('customer_id', username);
+          loginContainer.classList.add('d-none');
+          chatContainer.classList.remove('d-none');
+        } catch (err) {
+          alert(err.message);
+        }
+      });
+
+      // Logout handler
+      document.getElementById('logout-btn').addEventListener('click', () => {
+        localStorage.clear();
+        location.reload();
+      });
+
+      // Send message handler
+      document.getElementById('send-btn').addEventListener('click', sendMessage);
+      document.getElementById('user-input').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          sendMessage();
+        }
+      });
+
+      async function sendMessage() {
+        const inputEl = document.getElementById('user-input');
+        const msg = inputEl.value.trim();
+        if (!msg) return;
+        appendMessage('user', msg);
+        inputEl.value = '';
+        try {
+        const resp = await fetch('/api/v1/query', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + localStorage.getItem('token')
+            },
+            body: JSON.stringify({ query: msg })
+          });
+          const data = await resp.json();
+          // Show error message if API returned failure
+          let reply;
+          if (data.success === false) {
+            reply = data.error?.message || 'An error occurred';
+          } else {
+            // Use summary or fallback to JSON
+            reply = data.summary || JSON.stringify(data, null, 2);
+          }
+          appendMessage('bot', reply);
+        } catch (err) {
+          appendMessage('bot', 'Error: ' + err.message);
+        }
+      }
+
+      function appendMessage(sender, text) {
+        const chatBox = document.getElementById('chat-box');
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `message ${sender}`;
+        const bubble = document.createElement('div');
+        bubble.className = 'bubble';
+        bubble.innerHTML = marked.parse(text);
+        msgDiv.appendChild(bubble);
+        chatBox.appendChild(msgDiv);
+        chatBox.scrollTop = chatBox.scrollHeight;
+      }
+    })();
+  </script>
+</body>
+</html>

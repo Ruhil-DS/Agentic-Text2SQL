@@ -11,9 +11,9 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Agentic Text2SQL"
     
     # MongoDB settings
-    MONGODB_URI: str = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
-    MONGODB_DB: str = os.getenv("MONGODB_DB", "text2sql")
-    CREDENTIALS_COLLECTION: str = os.getenv("CREDENTIALS_COLLECTION", "credentials")
+    MONGODB_URI: str = os.getenv("MONGODB_URI")
+    MONGODB_DB: str = os.getenv("MONGODB_DB")
+    CREDENTIALS_COLLECTION: str = os.getenv("CREDENTIALS_COLLECTION")
     
     # PostgreSQL settings
     POSTGRES_URI: str = os.getenv("POSTGRES_URI", None)
@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     # OpenAI settings
     # Note: This should be empty or a fallback key. The actual API key should be retrieved
     # from the customer's credentials in MongoDB for each request.
-    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY")
     LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-4o")
     
     # Security settings
