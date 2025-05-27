@@ -79,7 +79,7 @@ class LLMService:
         if self.client and self.current_api_key_in_use == resolved_api_key:
             return self.client
 
-        app_logger.info(f"Initializing OpenAI client with API key: {resolved_api_key[:8]}...")
+        app_logger.info(f"Initializing OpenAI client with API key: {resolved_api_key[:6]}...")
         try:
             self.client = OpenAI(api_key=resolved_api_key)
             self.current_api_key_in_use = resolved_api_key
@@ -88,7 +88,9 @@ class LLMService:
             app_logger.error(f"Error initializing OpenAI client: {str(e)}")
             self.client = None
             self.current_api_key_in_use = None
-            raise
+            app_logger.error(f"Failed to initialize OpenAI client while resolving API key from {self.customer_id or 'global settings'}.")
+            raise Exception(f"Failed to initialize OpenAI client: {str(e)}")
+        app_logger.info(f"OpenAI client initialized successfully with API key source.")
         return self.client
 
     def get_sql_generation_prompt(self, schema_info, table_samples):
@@ -168,7 +170,7 @@ class LLMService:
             
             # Get system message from MongoDB
             system_message = self.get_sql_generation_prompt(schema_info, table_samples)
-            app_logger.info(f"------\nsyst msg: {system_message}\n--------")
+            app_logger.info(f"------\nsyst msg: {system_message[:100]}\n--------")
             
             functions = [
                 {
@@ -198,9 +200,7 @@ class LLMService:
             ]
             
             app_logger.info(f"Using OpenAI model: {self.model_name}")
-            # API key logging is now part of _get_or_initialize_client
             
-            # Try with both GPT-3.5 and GPT-4 models
             try:
                 # Make the API call with function calling using the new client pattern
                 app_logger.info(f"Attempting API call to OpenAI...")
@@ -214,10 +214,10 @@ class LLMService:
             except Exception as model_error:
                 app_logger.error(f"Error with model {self.model_name}: {str(model_error)}")
                 # If the first attempt fails, try with a fallback model
-                if self.model_name != "gpt-3.5-turbo":
-                    app_logger.info(f"Attempting fallback with gpt-3.5-turbo...")
+                if self.model_name != "gpt-4":
+                    app_logger.info(f"Attempting fallback with gpt-4...")
                     response = self.client.chat.completions.create(
-                        model="gpt-3.5-turbo",
+                        model="gpt-4",
                         messages=messages,
                         tools=[{"type": "function", "function": f} for f in functions],
                         tool_choice={"type": "function", "function": {"name": "generate_sql_query"}}
@@ -257,7 +257,7 @@ class LLMService:
             app_logger.error(f"Traceback: {traceback.format_exc()}")
             return False, f"Error: {str(e)}"
     
-    def summarize_query_results(self, user_query, sql_query, results):
+    def summarize_query_results(self, user_query, sql_query, results, max_rows=10):
         """
         Summarize the SQL query results in natural language
         
@@ -265,9 +265,10 @@ class LLMService:
             user_query: Original user question
             sql_query: Executed SQL query
             results: Query results
+            max_rows: Maximum number of rows to display in markdown table (default: 10)
             
         Returns:
-            str: Natural language summary of results
+            str: Natural language summary of results with markdown formatted table
         """
         try:
             self._get_or_initialize_client() # Ensures client is ready and self.client is set
@@ -304,11 +305,114 @@ Please summarize these results to answer the original question."""}
             
             summary = response.choices[0].message.content.strip()
             app_logger.info("Successfully generated results summary")
+            
+            # Format results to markdown
+            markdown_data = self.format_results_to_markdown(results, max_rows)
+            total_rows = markdown_data["total_rows"]
+            displayed_rows = markdown_data["displayed_rows"]
+            markdown_results = markdown_data["markdown_results"]
+            
+            # Check if there was an error in formatting
+            if "error" in markdown_data:
+                app_logger.warning(f"Error in markdown formatting: {markdown_data['error']}")
+                # Fallback to simple string representation
+                summary += f"\n\nHere are the results (could not format as table due to error):\n{results[:max_rows]}"
+            else:
+                # Append appropriate message based on row count
+                if total_rows > displayed_rows:
+                    summary += f"\n\nHere are the top {displayed_rows} results out of {total_rows} total rows:\n\n{markdown_results}"
+                else:
+                    summary += f"\n\nHere are all {total_rows} results:\n\n{markdown_results}"
+                
             return summary
             
         except Exception as e:
             app_logger.error(f"Error summarizing query results: {str(e)}")
             return mock_response.get_mock_response("summarization_failed")["error"]["message"]
+    
+    def format_results_to_markdown(self, results, max_rows=10):
+        """
+        Format SQL query results to a markdown table
+        
+        Args:
+            results: Query results from database
+            max_rows: Maximum number of rows to include in markdown (default: 10)
+            
+        Returns:
+            dict: Dictionary with markdown formatted table and metadata
+                {
+                    "markdown_results": Formatted markdown table string,
+                    "total_rows": Total number of rows in the results,
+                    "displayed_rows": Number of rows included in the markdown
+                }
+        """
+        try:
+            total_rows = len(results)
+            
+            if total_rows == 0:
+                return {
+                    "markdown_results": "No results found",
+                    "total_rows": 0,
+                    "displayed_rows": 0
+                }
+            
+            # Limit results to max_rows
+            display_results = results[:max_rows]
+            displayed_rows = len(display_results)
+            
+            # Get all possible column names across all results (in case results have different structures)
+            columns = []
+            for row in display_results:
+                for key in row.keys():
+                    if key not in columns:
+                        columns.append(key)
+            
+            # If no columns found (shouldn't happen, but just in case)
+            if not columns:
+                return {
+                    "markdown_results": "Results structure could not be determined",
+                    "total_rows": total_rows,
+                    "displayed_rows": 0
+                }
+            
+            # Create markdown header
+            markdown = "| " + " | ".join(columns) + " |\n"
+            markdown += "| " + " | ".join(["---" for _ in columns]) + " |\n"
+            
+            # Add rows
+            for row in display_results:
+                # Format values, ensuring strings are properly escaped for markdown
+                values = []
+                for col in columns:
+                    # Check if the column exists in this row
+                    if col in row:
+                        val = row[col]
+                        # Convert None to empty string
+                        if val is None:
+                            val = ""
+                        # If value has pipes or newlines, wrap in backticks
+                        elif isinstance(val, str) and ('|' in val or '\n' in val):
+                            val = f"`{val}`"
+                        values.append(str(val))
+                    else:
+                        # Column doesn't exist in this row
+                        values.append("")
+                
+                markdown += "| " + " | ".join(values) + " |\n"
+            return {
+                "markdown_results": markdown,
+                "total_rows": total_rows,
+                "displayed_rows": displayed_rows
+            }
+            
+        except Exception as e:
+            app_logger.error(f"Error formatting results to markdown: {str(e)}")
+            return {
+                "markdown_results": "Error formatting results",
+                "total_rows": len(results) if results else 0,
+                "displayed_rows": 0,
+                "error": str(e)
+            }
     
     def set_customer_id(self, customer_id):
         """Set the customer ID. This may cause the client to re-initialize on next use."""
@@ -321,4 +425,4 @@ Please summarize these results to answer the original question."""}
 
 
 # Create a default instance
-llm_service = LLMService() 
+llm_service = LLMService()
