@@ -191,6 +191,62 @@ To support other databases:
 
 The application logs are stored in `app.log` and contain detailed information about application operations.
 
+---------------
+---------------
+## File Walkthrough
+
+### `main.py`
+- Creates the FastAPI application
+- setups the routes, CORS, port, etc
+- Also binds the index.html file for a very basic UI built using HTML/CSS/JS
+
+
+### `config.py`
+- Core file to define the `Settings` class which extends the Pydantic's BaseSetting
+- Used to load env variables and check for them before the application startup
+- Contains configurable parameters that are used in the application
+
+
+### `routes.py`
+- Defines the API endpoints for the fastAPI application
+- Defines various Models which extends PyDantic's BaseModel
+   - This validates incoming request data against the model's schema. Also ensures serialization to JSON and type safety.
+
+### `mongo_client.py`
+- Helps with the MongoDB setup
+- Sets up the connection, helps us get relevant data with the right methods
+- Supports CRUD operations
+
+### `postgres_client.py`
+- Client file for executing on the SQL query on the database.
+
+
+### `prompt_initializer.py`
+- Helps with initializting LLM prompts
+
+
+### `auth.py`
+- This file handles authentication and authorization for the application.
+
+
+### `query_service.py`
+- responsible for processing natural language queries, converting them into SQL, executing the SQL queries, and returning the results.
+- It integrates with various components like the LLM service, SQL agent, and PostgreSQL client.
+
+
+### `llm_service.py`
+- Helps us with the LLM related method callings like loading prompts, generating SQL, summarizing results.
+
+
+### `sql_Agent.py`
+- Once the SQL is generated, it goes to this file for validation
+- It first manually detects and fixes some common issues like spelling mistakes in the table names or missing quotes for `LIKE` statements.
+- It then proceeds to validate the query for ensuring that we only process read-only queries.
+- If the validation fails for some reason, we move on to debigging the query with another LLM call where we fix the issues.
+> This is a v1 of my custom sql-agent. Future versions will have better functionalities.
+
+
+
 ## License
 
 [MIT License](LICENSE) 

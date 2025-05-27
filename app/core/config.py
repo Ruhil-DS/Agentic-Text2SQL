@@ -19,7 +19,6 @@ class Settings(BaseSettings):
     POSTGRES_URI: str = os.getenv("POSTGRES_URI", None)
     
     # OpenAI settings
-    # Note: This should be empty or a fallback key. The actual API key should be retrieved
     # from the customer's credentials in MongoDB for each request.
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY")
     LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-4o")
