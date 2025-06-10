@@ -94,7 +94,7 @@ class SQLAgent:
             if not parsed:
                 return False, "Empty or invalid SQL query"
             
-            # Get the first statement (we don't allow multiple statements)
+            # Get the first statement // we don't allow multiple statements
             stmt = parsed[0]
             
             # Check that it's a SELECT statement
@@ -237,7 +237,7 @@ class SQLAgent:
                     app_logger.warning(f"Fixed query validation failed: {validation_result}")
                     return False, validation_result
                 
-                app_logger.info(f"Query fixed successfully: {fixed_query[:100]}... ({explanation})")
+                app_logger.info(f"Query fixed successfully: {fixed_query[:100]}\nExplanation: ({explanation})")
                 return True, fixed_query
             else:
                 app_logger.warning("No function call in response")
@@ -266,8 +266,10 @@ class SQLAgent:
         was_modified = False
         
         # Fix 1: Missing quotes around string literals
-        # This is a basic example - would need to be more sophisticated in production
         def add_quotes_to_strings(match):
+            # nonlocal to modify the outer scope variable and not the global one
+            # The nonlocal keyword is used to indicate that a variable belongs to the 
+            # nearest enclosing scope (outside the current function but not global).
             nonlocal was_modified
             was_modified = True
             return f"= '{match.group(1)}'"
@@ -303,9 +305,11 @@ class SQLAgent:
         # First try to fix common issues automatically
         fixed_query, was_modified = self.detect_and_fix_common_issues(query, schema_info)
         if was_modified:
+            app_logger.info(f"---------------\nOriginal SQL query: {query}\n---------------")
+            app_logger.info(f"---------------\nFixed SQL query: {fixed_query}\n---------------")
             query = fixed_query
             
-        # Validate the query
+        # Validate the query for safety and correctness
         is_valid, validation_result = self.validate_query(query)
         if is_valid:
             return True, query
@@ -318,6 +322,8 @@ class SQLAgent:
             postgres_client.execute_query(query)
             # If we reach here, the query actually ran despite validation failure
             # This shouldn't happen normally, but just in case
+            # THIS IS POTENTIALLY DANGEROUS - What if we execute a harmful query?
+            app_logger.warning(f"Query passed execution but failed validation: {validation_result}")
             return True, query
         except Exception as exec_error:
             # Debug with the execution error
