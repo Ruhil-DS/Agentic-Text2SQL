@@ -246,6 +246,10 @@ The application logs are stored in `app.log` and contain detailed information ab
 > This is a v1 of my custom sql-agent. Future versions will have better functionalities.
 
 
+# Demo
+
+https://www.loom.com/share/93b4c204c8d741fea44e73bc27bfa135?sid=0ab0a3d9-1503-4620-9b2a-fce16bb8e253
+
 
 ## License
 
